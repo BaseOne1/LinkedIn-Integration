@@ -1,0 +1,164 @@
+import json
+import os
+import requests
+from datetime import datetime, timezone
+
+UNIPILE_API_KEY = os.environ.get("UNIPILE_API_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+BOT_ATTENDEE_ID = "plAVrYJAVbOv3jUlFakyuw"
+last_replies = {}
+conversation_memory = {}
+
+def send_unipile_message(chat_id, account_id, message, api_key):
+    url = f"https://api12.unipile.com:14208/api/v1/chats/{chat_id}/messages"
+    files = {
+        "text": (None, message),
+        "account_id": (None, account_id)
+    }
+    headers = {
+        "X-API-KEY": api_key,
+        "accept": "application/json"
+    }
+    try:
+        response = requests.post(url, files=files, headers=headers)
+        print(f"Unipile response: {response.status_code} - {response.text}")
+        return response.status_code, response.text
+    except Exception as e:
+        print("Error sending message to Unipile:", str(e))
+        return 500, str(e)
+
+def should_process_message(message_timestamp_str, threshold_seconds=30):
+    try:
+        message_time = datetime.fromisoformat(message_timestamp_str.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        age_seconds = (now - message_time).total_seconds()
+        print(f"Message age: {age_seconds} seconds")
+        return age_seconds < threshold_seconds
+    except Exception as e:
+        print("Error parsing timestamp:", str(e))
+        return False
+
+def generate_openai_reply(user_message, sender_name, greeted_before):
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    if greeted_before:
+        system_msg = (
+            "Your name is SAM. You are Baseone's professional LinkedIn assistant. "
+            "Respond professionally, warmly, and helpfully. Do not repeat the user's name or greeting."
+        )
+    else:
+        system_msg = (
+            f"Your name is SAM. You are Baseone's professional LinkedIn assistant. "
+            f"You are chatting with {sender_name}. Greet them by name in a friendly, professional way and assist them helpfully."
+        )
+
+    data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_message}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 200
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        result = response.json()
+
+        if response.status_code != 200:
+            print("OpenAI API returned error:", result)
+            return "Thanks for your message! One of our executives will reach you via LinkedIn chat shortly."
+
+        if 'choices' in result and len(result['choices']) > 0:
+            return result['choices'][0]['message']['content'].strip()
+        else:
+            print("OpenAI API missing choices:", result)
+            return "Thanks for your message! One of our executives will reach you via LinkedIn chat shortly."
+        
+    except Exception as e:
+        print("OpenAI API error:", str(e))
+        return "Thanks for your message! One of our executives will reach you via LinkedIn chat shortly."
+
+
+def lambda_handler(event, context):
+    print("Received event:")
+    print(json.dumps(event, indent=4))
+
+    try:
+        body = json.loads(event.get("body", "{}"))
+    except Exception as e:
+        print("Invalid JSON body:", str(e))
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Invalid JSON"})
+        }
+
+    required_fields = ["event", "message_type", "message", "sender", "account_info", "chat_id", "account_id", "timestamp"]
+    if not all(field in body for field in required_fields):
+        print("Ignored non-message event (e.g., system ping or partial payload).")
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "Ignored non-message event"})
+        }
+
+    event_type = body["event"]
+    message_type = body["message_type"]
+    message = body.get("message", "").strip()
+    sender = body.get("sender", {})
+    sender_name = sender.get("attendee_name", "")
+    sender_id = sender.get("attendee_id", "")
+    account_name = body["account_info"].get("name", "")
+    chat_id = body["chat_id"]
+    account_id = body["account_id"]
+    timestamp = body.get("timestamp")
+
+    if not should_process_message(timestamp):
+        print(f"Ignored old or duplicate message with timestamp: {timestamp}")
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "Ignored old or duplicate message"})
+        }
+
+    if (
+        event_type != "message_received" or
+        message_type != "MESSAGE" or
+        not message or
+        sender_id == BOT_ATTENDEE_ID or
+        sender_name == account_name
+    ):
+        print(f"Ignored self-message or non-user message. Sender: {sender_name}, ID: {sender_id}")
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "Filtered self or irrelevant message"})
+        }
+
+    if last_replies.get(message):
+        print(f"Identical reply already sent for message: {message}, skipping.")
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "Identical reply already sent"})
+        }
+    greeted_before = False
+    if chat_id in conversation_memory and sender_id in conversation_memory[chat_id]:
+        greeted_before = True
+    else:
+        conversation_memory.setdefault(chat_id, set()).add(sender_id)
+
+    reply = generate_openai_reply(message, sender_name, greeted_before)
+    print("Generated OpenAI reply:", reply)
+
+    status, resp_text = send_unipile_message(chat_id, account_id, reply, UNIPILE_API_KEY)
+    last_replies[message] = reply
+
+    return {
+        "statusCode": 200 if status == 200 else 500,
+        "body": json.dumps({
+            "message": "Reply sent" if status == 200 else "Failed to send reply",
+            "unipile_response": resp_text
+        })
+    }

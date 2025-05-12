@@ -1,0 +1,12 @@
+generate_post:
+  system: >
+    You are a bot specialized in creating marketing content
+    in 5 points with emoticons and hashtags for LinkedIn posts
+    for Baseone, a company focused on Agentic AI and analytics.
+  user: >
+    Please write a LinkedIn post about the following topic:
+    How baseone can help companies solve in STAR basis for any product and how they can resolve those tasks analytically"
+
+generate_image:
+  prompt: >
+     AR1A blonde woman and 3 more data professionals understanding assignments from thier boss CEO in an office om their laptop developing a dashboards wearing suits, in a ultra hologramic modern office in London

@@ -1,0 +1,53 @@
+project_name: "LinkedIn Auto Post"
+description: "Automated content creation and posting"
+
+headers:
+  Authorization: "Bearer ${ACCESS_TOKEN}"
+  X-Restli-Protocol-Version: "2.0.0"
+  Content-Type: "application/json"
+  LinkedIn-Version: "202503"
+
+params:
+  q: "author"
+  count: 1
+  start: 0
+
+openai:
+  model: "gpt-4"
+  temperature: 0.4
+  max_tokens: 400
+  top_p: 1.0
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+
+linkedin:
+  post_visibility: "PUBLIC"
+  include_image: true
+  approval_required: true 
+
+image:
+  enabled: true
+  prompt_style: "professional"
+  resolution: "1024x1024"
+  style: "realistic"
+  aspect_ratio: "16:9"
+
+email:
+  from_name: "kamesh.kumar@baseone.uk"
+  to: "kamesh.kumar@baseone.uk"
+  subject: "LinkedIn Post Awaiting Approval"
+  approve_url: "https://ther7oaeqc.execute-api.ap-south-1.amazonaws.com/default/postai"
+  reject_url: "https://ther7oaeqc.execute-api.ap-south-1.amazonaws.com/default/postai"
+
+image_gen:
+  prompt: prompt
+  guidance_scale: 10                                                                                              
+  seed: 0
+  sync_mode: False
+  num_images: 1
+  enable_safety_checker: False
+  safety_tolerance: 6
+  output_format: "jpeg"
+  aspect_ratio: "1:1"
+  finetune_id: FINE_TUNE_ID
+  finetune_strength: 0.7

@@ -1,0 +1,8 @@
+File | Purpose
+src/utils/image_handler.py | Image generation, S3 upload, email send
+src/utils/text_handler.py | Post (text) generation
+src/api/post_ai.py | Main API call functions (optional if needed)
+src/db/s3_client.py | S3 client connection
+src/post_ai/config/params.yaml | All configs (you already have)
+src/post_ai/config/settings.py | Settings loader
+main.py | Main runner (to trigger post + image + upload + email)
