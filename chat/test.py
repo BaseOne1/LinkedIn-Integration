@@ -5,7 +5,6 @@ import requests
 from datetime import datetime, timezone, timedelta
 import hashlib
 
-# --- Environment Config ---
 UNIPILE_API_KEY = os.getenv("UNIPILE_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ARIA_ID = os.getenv("ARIA_ID")
@@ -66,7 +65,7 @@ def get_recent_messages(sender_id, limit=10):
     try:
         response = table.query(
             KeyConditionExpression=boto3.dynamodb.conditions.Key("PK ").eq(f"MEMORY#{sender_id}"),
-            ScanIndexForward=True,  # Oldest to newest
+            ScanIndexForward=True,
             Limit=limit
         )
         return [
@@ -82,11 +81,7 @@ def generate_openai_reply(user_message, sender_name, greeted_before, sender_id):
     """Generate response using OpenAI with short-term memory."""
     if sender_id == ARIA_ID:
         return None
-
-    # Greeting message based on whether the user has been greeted before
     greeting = f"Hello {sender_name}, how can I assist you today?" if not greeted_before else ""
-
-    # System prompt for guiding the assistant's behavior
     system_prompt = (
         "You are ARIA,You will:\n"
         "- You respond precise and as professional chatbot"
@@ -110,12 +105,9 @@ def generate_openai_reply(user_message, sender_name, greeted_before, sender_id):
         "- CEO: https://www.linkedin.com/in/matthewspuffard/"
     )
 
-    # Get the user's recent message history from memory
-    history = get_recent_messages(sender_id, limit=5)  # Limit to last 5 messages
+    history = get_recent_messages(sender_id, limit=5) 
     messages = [{"role": "system", "content": system_prompt}] + history
     messages.append({"role": "user", "content": user_message})
-
-    # OpenAI API payload
     payload = {
         "model": "gpt-3.5-turbo",
         "messages": messages,
@@ -124,7 +116,6 @@ def generate_openai_reply(user_message, sender_name, greeted_before, sender_id):
     }
 
     try:
-        # Sending the request to OpenAI API
         response = requests.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
